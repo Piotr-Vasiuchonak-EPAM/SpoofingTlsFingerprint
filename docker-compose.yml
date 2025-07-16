@@ -1,15 +1,32 @@
 # https://github.com/Skyuzii/SpoofingTlsFingerprint
 
 services:
-  spoofingtls:
-    build: .
-    container_name: tls_spooftls-proxy
+  tls_spoof_proxy:
+    build:
+      context: .
+      dockerfile: ./tls_spoof_proxy.dockerfile
+    container_name: tls-spoof-proxy
     environment: 
-      - VIRTUAL_HOST=${LE_HOST}
-      - LETSENCRYPT_HOST=${LE_HOST}
+      - VIRTUAL_HOST=${TLS_SPOOF_PROXY_HOST}
+      - LETSENCRYPT_HOST=${TLS_SPOOF_PROXY_HOST}
       - LETSENCRYPT_EMAIL=lol@lol.com
     expose:
-      - "8000"
+      - "${TLS_SPOOF_PROXY_PORT}"
+    restart: unless-stopped
+    networks:
+      - cms_php_network
+
+  tls_spoof_wrapper:
+    build:
+      context: .
+      dockerfile: ./tls_spoof_wrapper.dockerfile
+    container_name: tls-spoof-wrapper
+    environment: 
+      - VIRTUAL_HOST=${TLS_SPOOF_WRAPPER_HOST}
+      - LETSENCRYPT_HOST=${TLS_SPOOF_WRAPPER_HOST}
+      - LETSENCRYPT_EMAIL=lol@lol.com
+    expose:
+      - "${TLS_SPOOF_WRAPPER_PORT}"
     restart: unless-stopped
     networks:
       - cms_php_network

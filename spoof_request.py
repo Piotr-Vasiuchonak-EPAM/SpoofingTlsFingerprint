@@ -8,8 +8,9 @@ from dotenv import load_dotenv
 # --- Load environment variables ---
 load_dotenv()
 
-GO_PROXY_URL = os.getenv("GO_PROXY_URL")
-TARGET_URL = os.getenv("TARGET_URL")
+TLS_SPOOF_PROXY_HOST = os.getenv("TLS_SPOOF_PROXY_HOST")
+TLS_SPOOF_PROXY_URL = f"https://{TLS_SPOOF_PROXY_HOST}/handle"
+TARGET_URL = os.getenv("TEST_TARGET_URL")
 CHROME_USER_AGENT = os.getenv("CHROME_USER_AGENT")
 CHROME_JA3 = os.getenv("CHROME_JA3")
 
@@ -17,7 +18,7 @@ CHROME_JA3 = os.getenv("CHROME_JA3")
 parser = argparse.ArgumentParser(description="Send request to TLS spoofing proxy or directly")
 parser.add_argument("--proxy", help="Proxy URL in format http://IP:PORT or http://USER:PASS@IP:PORT", default=None)
 parser.add_argument("--clean", action="store_true", help="Only print the response body (payload.text)")
-parser.add_argument("--direct", action="store_true", help="Send request directly to TARGET_URL (bypass GO_PROXY_URL)")
+parser.add_argument("--direct", action="store_true", help="Send request directly to TARGET_URL (bypass TLS_SPOOF_PROXY)")
 args = parser.parse_args()
 
 # --- Request payload ---
@@ -77,7 +78,7 @@ try:
         if args.proxy:
             payload["Proxy"] = args.proxy
 
-        response = requests.post(GO_PROXY_URL, json=payload, timeout=30)
+        response = requests.post(TLS_SPOOF_PROXY_URL, json=payload, timeout=30)
         response.raise_for_status()
         data = response.json()
 
