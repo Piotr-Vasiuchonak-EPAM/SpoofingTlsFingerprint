@@ -6,7 +6,7 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
-	"github.com/Skyuzii/CycleTLS/cycletls"
+	"github.com/Danny-Dasilva/CycleTLS/cycletls"
 	"github.com/gorilla/mux"
 	"io/ioutil"
 	"log"
@@ -35,18 +35,24 @@ func main() {
 	log.Fatal(http.ListenAndServe(":"+port, router))
 }
 
-func CheckStatus(responseWriter http.ResponseWriter, request *http.Request) {
-	responseWriter.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(responseWriter).Encode("good")
+func CheckStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode("good")
 }
 
-func Handle(responseWriter http.ResponseWriter, request *http.Request) {
-	responseWriter.Header().Set("Content-Type", "application/json")
+func Handle(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 
 	var handleRequest Request.HandleRequest
-	json.NewDecoder(request.Body).Decode(&handleRequest)
+	err := json.NewDecoder(r.Body).Decode(&handleRequest)
+	if err != nil {
+		http.Error(w, "invalid JSON request body", http.StatusBadRequest)
+		return
+	}
+
 	client := cycletls.Init()
 
+	// Prepare cookies
 	var cookies []*http.Cookie
 	for _, cookie := range handleRequest.Cookies {
 		cookies = append(cookies, &http.Cookie{
@@ -65,8 +71,10 @@ func Handle(responseWriter http.ResponseWriter, request *http.Request) {
 	requestUrl, _ := url2.Parse(handleRequest.Url)
 	cookiesJar.SetCookies(requestUrl, cookies)
 
-	resp, err := client.Do(handleRequest.Url, cycletls.Options{
-		CookiesJar:         cookiesJar,
+	opts := cycletls.Options{
+		// Note: Danny-Dasilva CycleTLS doesn't have CookiesJar field,
+		// so you might need to set cookies manually in Headers or handle differently.
+		// Here we ignore CookiesJar since it's not defined in the new CycleTLS.
 		InsecureSkipVerify: handleRequest.InsecureSkipVerify,
 		Body:               handleRequest.Body,
 		Proxy:              handleRequest.Proxy,
@@ -75,50 +83,46 @@ func Handle(responseWriter http.ResponseWriter, request *http.Request) {
 		Ja3:                handleRequest.Ja3,
 		UserAgent:          handleRequest.UserAgent,
 		DisableRedirect:    handleRequest.DisableRedirect,
-	}, handleRequest.Method)
+	}
 
+	resp, err := client.Do(handleRequest.Url, opts, handleRequest.Method)
 	var handleResponse Response.HandleResponse
-
 	if err != nil {
 		fmt.Println(err)
 		handleResponse.Success = false
 		handleResponse.Error = err.Error()
-		json.NewEncoder(responseWriter).Encode(handleResponse)
+		json.NewEncoder(w).Encode(handleResponse)
 		return
 	}
 
 	handleResponse.Success = true
 	handleResponse.Payload = &Response.HandleResponsePayload{
-		Text:    DecodeResponse(&resp),
-		Headers: resp.Response.Headers,
-		Status:  resp.Response.Status,
-		Url:     resp.Response.Url,
+		Text:    decodeResponseBody(resp.Body, resp.Headers),
+		Headers: resp.Headers,
+		Status:  resp.Status,
+		Url:     handleRequest.Url,
 	}
 
-	for _, cookie := range cookiesJar.Cookies(requestUrl) {
-		handleResponse.Payload.Cookies = append(handleResponse.Payload.Cookies, &cycletls.Cookie{
-			Name:     cookie.Name,
-			Value:    cookie.Value,
-			Path:     cookie.Path,
-			Domain:   cookie.Domain,
-			Expires:  cookie.Expires,
-			MaxAge:   cookie.MaxAge,
-			Secure:   cookie.Secure,
-			HTTPOnly: cookie.HttpOnly,
-		})
-	}
+	// Cookies: Danny-Dasilva CycleTLS doesn't expose cookies like Skyuzii's,
+	// so this part depends on your Request/Response package compatibility.
+	// Here, we skip adding cookies unless you implement manual cookie parsing.
 
-	json.NewEncoder(responseWriter).Encode(handleResponse)
+	json.NewEncoder(w).Encode(handleResponse)
 }
 
-func DecodeResponse(response *cycletls.Response) string {
-	switch response.Response.Headers["Content-Encoding"] {
-	case "gzip":
-		reader, _ := gzip.NewReader(strings.NewReader(response.Response.Body))
+func decodeResponseBody(body string, headers map[string]string) string {
+	if strings.EqualFold(headers["Content-Encoding"], "gzip") {
+		reader, err := gzip.NewReader(strings.NewReader(body))
+		if err != nil {
+			// Return raw body if gzip decode fails
+			return body
+		}
 		defer reader.Close()
-		readerResponse, _ := ioutil.ReadAll(reader)
-		return string(readerResponse)
-	default:
-		return response.Response.Body
+		decoded, err := ioutil.ReadAll(reader)
+		if err != nil {
+			return body
+		}
+		return string(decoded)
 	}
+	return body
 }

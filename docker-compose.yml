@@ -1,0 +1,19 @@
+# https://github.com/Skyuzii/SpoofingTlsFingerprint
+
+services:
+  spoofingtls:
+    build: .
+    container_name: tls_spooftls-proxy
+    environment: 
+      - VIRTUAL_HOST=${LE_HOST}
+      - LETSENCRYPT_HOST=${LE_HOST}
+      - LETSENCRYPT_EMAIL=lol@lol.com
+    expose:
+      - "8000"
+    restart: unless-stopped
+    networks:
+      - cms_php_network
+
+networks:
+  cms_php_network:
+    external: true

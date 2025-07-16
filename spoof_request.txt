@@ -1,0 +1,4 @@
+./spoof_request.py --proxy socks5://45.131.42.189:1080
+./spoof_request.py --proxy http://45.131.42.189:42567
+./spoof_request.py --direct
+./spoof_request.py --clean
