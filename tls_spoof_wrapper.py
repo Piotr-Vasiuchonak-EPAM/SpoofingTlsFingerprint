@@ -1,75 +1,93 @@
 #!/usr/bin/env python3
-
 import os
+import json
 import random
 import requests
-from flask import Flask, request, Response, jsonify
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import urlparse, urlunparse
 from dotenv import load_dotenv
 
 load_dotenv()
 
-TLS_SPOOF_PROXY_HOST = os.getenv("TLS_SPOOF_PROXY_HOST")
-TLS_SPOOF_PROXY = f"https://{TLS_SPOOF_PROXY_HOST}/handle"
+TLS_SPOOF_PROXY = f"https://{os.getenv('TLS_SPOOF_PROXY_HOST')}/handle"
+CHROME_USER_AGENT = os.getenv("CHROME_USER_AGENT", "Mozilla/5.0")
+CHROME_JA3 = os.getenv("CHROME_JA3", "")
 PROXY_LIST = os.getenv("OUTBOUND_PROXY_LIST", "").split(",")
 LISTEN_PORT = int(os.getenv("TLS_SPOOF_WRAPPER_PORT", "8888"))
 
-app = Flask(__name__)
+class ProxyHandler(BaseHTTPRequestHandler):
+    def do_GET(self): self.forward_request()
+    def do_POST(self): self.forward_request()
+    def do_PUT(self): self.forward_request()
+    def do_DELETE(self): self.forward_request()
+    def do_HEAD(self): self.forward_request()
+    def do_OPTIONS(self): self.forward_request()
+    def do_PATCH(self): self.forward_request()
 
-CHROME_USER_AGENT = os.getenv("CHROME_USER_AGENT", "Mozilla/5.0")
-CHROME_JA3 = os.getenv("CHROME_JA3", "")
+    def forward_request(self):
+        try:
+            # Parse and rewrite target URL to HTTPS
+            parsed = urlparse(self.path)
 
-@app.route('/ping', methods=['GET'])
-def ping():
-    return jsonify({"response": "pong"}), 200
+            if not parsed.scheme:
+                host = self.headers.get("Host")
+                if not host:
+                    self.send_error(400, "Missing Host header")
+                    return
+                target_url = f"https://{host}{self.path}"
+            else:
+                parsed = parsed._replace(scheme="https")
+                target_url = urlunparse(parsed)
 
-@app.route('/', defaults={'path': ''}, methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
-@app.route('/<path:path>', methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
-def proxy(path):
-    try:
-        method = request.method
-        target_url = request.headers.get("X-Target-URL")
-        if not target_url:
-            return jsonify({"error": "X-Target-URL header missing"}), 400
+            # Body handling
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length).decode("utf-8") if content_length > 0 else ""
 
-        outgoing_proxy = random.choice(PROXY_LIST) if PROXY_LIST and PROXY_LIST[0] else None
+            outgoing_proxy = random.choice(PROXY_LIST) if PROXY_LIST and PROXY_LIST[0] else None
 
-        payload = {
-            "Url": target_url,
-            "Method": method,
-            "Headers": dict(request.headers),
-            "UserAgent": CHROME_USER_AGENT,
-            "Ja3": CHROME_JA3,
-            "Timeout": 20,
-            "DisableRedirect": False,
-            "InsecureSkipVerify": False,
-            "Cookies": [],
-        }
+            spoof_request = {
+                "Url": target_url,
+                "Method": self.command,
+                "Headers": dict(self.headers),
+                "UserAgent": CHROME_USER_AGENT,
+                "Ja3": CHROME_JA3,
+                "Timeout": 20,
+                "DisableRedirect": False,
+                "InsecureSkipVerify": False,
+                "Cookies": [],
+                "Body": body,
+            }
 
-        if method in ["POST", "PUT", "PATCH"]:
-            try:
-                payload["Payload"] = request.get_data(as_text=True)
-            except Exception:
-                payload["Payload"] = ""
+            if outgoing_proxy:
+                spoof_request["Proxy"] = outgoing_proxy
 
-        if outgoing_proxy:
-            payload["Proxy"] = outgoing_proxy
+            # Send to tls_spoof_proxy
+            resp = requests.post(TLS_SPOOF_PROXY, json=spoof_request, timeout=30)
+            data = resp.json()
 
-        resp = requests.post(TLS_SPOOF_PROXY, json=payload, timeout=30)
-        resp.raise_for_status()
-        data = resp.json()
+            if not data.get("success"):
+                self.send_error(502, f"TLS spoof proxy error: {data.get('error')}")
+                return
 
-        if not data.get("success"):
-            return jsonify({"error": "TLS proxy error", "details": data.get("error")}), 502
+            payload = data.get("payload", {})
+            self.send_response(payload.get("status", 200))
 
-        proxy_payload = data.get("payload", {})
-        status_code = proxy_payload.get("status", 200)
-        response_text = proxy_payload.get("text", "")
-        response_headers = proxy_payload.get("headers", {})
+            for k, v in payload.get("headers", {}).items():
+                try:
+                    self.send_header(k, v)
+                except Exception:
+                    pass
+            self.end_headers()
+            self.wfile.write(payload.get("text", "").encode("utf-8"))
 
-        return Response(response=response_text, status=status_code, headers=response_headers)
+        except Exception as e:
+            self.send_error(500, f"Proxy wrapper error: {str(e)}")
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+def run():
+    server_address = ("0.0.0.0", LISTEN_PORT)
+    httpd = HTTPServer(server_address, ProxyHandler)
+    print(f"[*] TLS spoofing wrapper proxy running on port {LISTEN_PORT}")
+    httpd.serve_forever()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=LISTEN_PORT)
+    run()

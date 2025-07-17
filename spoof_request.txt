@@ -2,3 +2,26 @@
 ./spoof_request.py --proxy http://45.131.42.189:42567
 ./spoof_request.py --direct
 ./spoof_request.py --clean
+
+
+
+curl -s --proxy http://65.108.235.240:8888 http://tls.peet.ws/api/all | jq
+curl -s --proxy http://tls-wrapper.dephub.dev:8888 http://tls.peet.ws/api/all | jq
+curl -s --proxy http://localhost:8888 http://tls.peet.ws/api/all | jq '{
+  "IP Address": .ip,
+  "HTTP Version": .http_version,
+  "HTTP Method": .method,
+  "User-Agent": .user_agent,
+  "TLS Ciphers": .tls.ciphers,
+  "TLS Version Record": .tls.tls_version_record,
+  "TLS Version Negotiated": .tls.tls_version_negotiated,
+  "JA3": .tls.ja3,
+  "JA3 Hash": .tls.ja3_hash,
+  "JA4": .tls.ja4,
+  "JA4-R": .tls.ja4_r,
+  "HTTP2 Sent Frame Headers": (
+    .http2.sent_frames[]
+    | select(.frame_type == "HEADERS")
+    | .headers
+  )
+}'

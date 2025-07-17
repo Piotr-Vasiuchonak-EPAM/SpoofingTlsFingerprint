@@ -1,4 +1,4 @@
-# https://github.com/Skyuzii/SpoofingTlsFingerprint
+# cms/tls_spoofing/SpoofingTlsFingerprint/docker-compose.yml
 
 services:
   tls_spoof_proxy:
@@ -21,12 +21,8 @@ services:
       context: .
       dockerfile: ./tls_spoof_wrapper.dockerfile
     container_name: tls-spoof-wrapper
-    environment: 
-      - VIRTUAL_HOST=${TLS_SPOOF_WRAPPER_HOST}
-      - LETSENCRYPT_HOST=${TLS_SPOOF_WRAPPER_HOST}
-      - LETSENCRYPT_EMAIL=lol@lol.com
-    expose:
-      - "${TLS_SPOOF_WRAPPER_PORT}"
+    ports:
+      - "${TLS_SPOOF_WRAPPER_PORT}:${TLS_SPOOF_WRAPPER_PORT}"
     restart: unless-stopped
     networks:
       - cms_php_network

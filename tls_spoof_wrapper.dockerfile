@@ -1,23 +1,24 @@
-# Base image with Python 3.12
+# cms/tls_spoofing/SpoofingTlsFingerprint/tls_spoof_wrapper.dockerfile
+
 FROM python:3.12-slim
 
-# Set workdir
+# Set working directory
 WORKDIR /app
 
-# Install dependencies
+# Install required dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends gcc && \
-    pip install --no-cache-dir flask python-dotenv requests && \
+    pip install --no-cache-dir requests python-dotenv && \
     apt-get remove -y gcc && \
     apt-get autoremove -y && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy your script and .env loader
+# Copy the proxy handler script and .env
 COPY tls_spoof_wrapper.py /app/
 COPY .env /app/
 
-# Expose the port (from env at runtime)
+# Expose the port used by the wrapper
 EXPOSE 8888
 
-# Run the wrapper script
+# Use standard proxy handler server
 CMD ["python", "tls_spoof_wrapper.py"]
