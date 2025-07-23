@@ -6,10 +6,10 @@ services:
       context: .
       dockerfile: ./tls_spoof_proxy.dockerfile
     container_name: tls-spoof-proxy
-    environment: 
-      - VIRTUAL_HOST=${TLS_SPOOF_PROXY_HOST}
-      - LETSENCRYPT_HOST=${TLS_SPOOF_PROXY_HOST}
-      - LETSENCRYPT_EMAIL=lol@lol.com
+#    environment: 
+#      - VIRTUAL_HOST=${TLS_SPOOF_PROXY_HOST}
+#      - LETSENCRYPT_HOST=${TLS_SPOOF_PROXY_HOST}
+#      - LETSENCRYPT_EMAIL=lol@lol.com
     expose:
       - "${TLS_SPOOF_PROXY_PORT}"
     restart: unless-stopped

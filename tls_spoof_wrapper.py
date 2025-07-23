@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-TLS_SPOOF_PROXY = f"https://{os.getenv('TLS_SPOOF_PROXY_HOST')}/handle"
+TLS_SPOOF_PROXY = f"http://{os.getenv('TLS_SPOOF_PROXY_HOST')}:{os.getenv('TLS_SPOOF_PROXY_PORT')}/handle"
 CHROME_USER_AGENT = os.getenv("CHROME_USER_AGENT", "Mozilla/5.0")
 CHROME_JA3 = os.getenv("CHROME_JA3", "")
 PROXY_LIST = os.getenv("OUTBOUND_PROXY_LIST", "").split(",")
